@@ -124,6 +124,7 @@ def train_one_epoch(run_manager, args, epoch, warmup_epochs=0, warmup_lr=0):
 			loss_of_subnets = []
 			# compute output
 			subnet_str = ''
+            # NOTE(ljm): dynamic_batch_size is the sampled times in one iter
 			for _ in range(args.dynamic_batch_size):
 				# set random seed before sampling
 				subnet_seed = int('%d%.3d%.3d' % (epoch * nBatch + i, _, 0))

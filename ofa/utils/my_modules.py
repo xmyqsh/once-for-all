@@ -90,6 +90,8 @@ def replace_conv2d_with_my_conv2d(net, ws_eps=None):
 			m._modules[name].load_state_dict(sub_module.state_dict())
 			# load requires_grad
 			m._modules[name].weight.requires_grad = sub_module.weight.requires_grad
+            # TODO(ljm): remove the following lines
+            # assert sub_module.bias is None
 			if sub_module.bias is not None:
 				m._modules[name].bias.requires_grad = sub_module.bias.requires_grad
 	# set ws_eps

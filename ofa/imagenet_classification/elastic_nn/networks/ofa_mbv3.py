@@ -160,6 +160,7 @@ class OFAMobileNetV3(MobileNetV3):
 		return self.block_group_info
 
 	def load_state_dict(self, state_dict, **kwargs):
+        # TODO(ljm): find out why replace keys back and forth here?
 		model_dict = self.state_dict()
 		for key in state_dict:
 			if '.mobile_inverted_conv.' in key:
@@ -197,6 +198,7 @@ class OFAMobileNetV3(MobileNetV3):
 		expand_ratio = val2list(e, len(self.blocks) - 1)
 		depth = val2list(d, len(self.block_group_info))
 
+        # NOTE(ljm): some of the sampled ks and expand_ratio are not included in the runtime_depth
 		for block, k, e in zip(self.blocks[1:], ks, expand_ratio):
 			if k is not None:
 				block.conv.active_kernel_size = k

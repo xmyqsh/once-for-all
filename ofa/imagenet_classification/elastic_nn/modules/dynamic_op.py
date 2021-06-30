@@ -64,6 +64,7 @@ class DynamicSeparableConv2d(nn.Module):
 				_input_filter = _input_filter.contiguous()
 				_input_filter = _input_filter.view(_input_filter.size(0), _input_filter.size(1), -1)
 				_input_filter = _input_filter.view(-1, _input_filter.size(2))
+                # NOTE(ljm): The Kernel Transform matrix will be updated on the gradient backward
 				_input_filter = F.linear(
 					_input_filter, self.__getattr__('%dto%d_matrix' % (src_ks, target_ks)),
 				)

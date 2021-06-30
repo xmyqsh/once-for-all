@@ -20,6 +20,7 @@ __all__ = [
 
 
 def adjust_bn_according_to_idx(bn, idx):
+    # TODO(ljm): check the dim of bn's weight and param
     bn.weight.data = torch.index_select(bn.weight.data, 0, idx)
     bn.bias.data = torch.index_select(bn.bias.data, 0, idx)
     if type(bn) in [nn.BatchNorm1d, nn.BatchNorm2d]:
@@ -146,6 +147,8 @@ class DynamicMBConvLayer(MyModule):
 
         self.active_kernel_size = max(self.kernel_size_list)
         self.active_expand_ratio = max(self.expand_ratio_list)
+        # NOTE(ljm): MobileNetV3's blocks out_channel is deteministic, its network volume is only controlled by expand_ratio.
+        #            The width-multi is not searched in this project and has been setted to 1.0.
         self.active_out_channel = max(self.out_channel_list)
 
     def forward(self, x):
@@ -260,14 +263,19 @@ class DynamicMBConvLayer(MyModule):
         }
 
     def re_organize_middle_weights(self, expand_ratio_stage=0):
+        # NOTE(ljm): importance score in the point_linear.conv.conv.weight's in_channels
+        # TODO(ljm): Why does get the importance score from the point_linear weight?
+        # Answer:    Because the point_linear layer is repondonse for channel combination!
         importance = torch.sum(torch.abs(self.point_linear.conv.conv.weight.data), dim=(0, 2, 3))
         if isinstance(self.depth_conv.bn, DynamicGroupNorm):
+            # TODO(ljm): dig into this branch
             channel_per_group = self.depth_conv.bn.channel_per_group
             importance_chunks = torch.split(importance, channel_per_group)
             for chunk in importance_chunks:
                 chunk.data.fill_(torch.mean(chunk))
             importance = torch.cat(importance_chunks, dim=0)
         if expand_ratio_stage > 0:
+            # NOTE(ljm): 这里配合progressive shrinking，保证高效实现论文描述的功能
             sorted_expand_list = copy.deepcopy(self.expand_ratio_list)
             sorted_expand_list.sort(reverse=True)
             target_width_list = [
@@ -289,6 +297,12 @@ class DynamicMBConvLayer(MyModule):
         )
 
         adjust_bn_according_to_idx(self.depth_conv.bn.bn, sorted_idx)
+        # TODO(ljm): assert self.depth_conv.conv.conv.weight.data.shape == (expanded_out_channel, 1, ks, ks)
+        #            or expanded_out_channel * (1, 1, ks, ks)
+        # generalization: expanded_out_channel / group_size * (group_size, group_size, ks, ks)
+        # So, this implementation is only for depthwise seperable convolution
+        # But, What is the actual conv.weight for conv2d with group
+        # Guess: (expanded_out_channel, group_size, ks, ks) == (expanded_out_channel / group_size * group_size, group_size, ks, ks)
         self.depth_conv.conv.conv.weight.data = torch.index_select(
             self.depth_conv.conv.conv.weight.data, 0, sorted_idx
         )
@@ -302,6 +316,7 @@ class DynamicMBConvLayer(MyModule):
             se_reduce = self.depth_conv.se.fc.reduce
             se_reduce.weight.data = torch.index_select(se_reduce.weight.data, 1, sorted_idx)
             # middle weight reorganize
+            # NOTE(ljm): recompute the importance here. GOOD!!! CORRECT!!!
             se_importance = torch.sum(torch.abs(se_expand.weight.data), dim=(0, 2, 3))
             se_importance, se_idx = torch.sort(se_importance, dim=0, descending=True)
 
